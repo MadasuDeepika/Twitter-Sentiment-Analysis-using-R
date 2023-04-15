@@ -1,0 +1,577 @@
+---
+title: "Erode_elections_sentimental_analysis"
+author: "G.HARINISRI & MADASU DEEPIKA"
+date: "19MIA1069 & 19MIA1066"
+output: html_document
+---
+
+#### <b> Review-3 </b>
+
+![](social.png) ![](on.png)
+
+![](Erode.png)
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(warn = -1)
+```
+
+##### **IMPORTING THE LIBRARIES**
+
+```{r}
+library(rlang)
+library(dplyr)
+library(ggplot2)
+library(tidytext)
+library(igraph)
+library(rtweet)
+library(maps)
+library(tm)
+library(wordcloud) 
+library(syuzhet)
+library(reactable)
+library(wordcloud2)
+library(stringr)
+library(data.table)
+library(tidytext)
+library(topicmodels)
+library(dplyr)
+library(gmodels)
+library(wordcloud)
+library(RColorBrewer)
+
+```
+
+```{r}
+text <- readLines("C:\\Users\\HP\\Downloads\\Election tweets.csv")
+summary(text)
+head(text,10)
+```
+
+```{r}
+election_tweets <- read.csv("C:\\Users\\HP\\Downloads\\Election tweets.csv")
+head(election_tweets,10)
+```
+
+```{r}
+
+library(rtweet)
+library(tidytext)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(lattice)
+library(caret)
+```
+
+```{r}
+library(rtweet)
+tweets <- search_tweets("#ErodeEastByPolls", n = 1000)
+head(tweets,10)
+
+```
+
+```{r}
+library(rtweet)
+erode_tweets <- search_tweets("#erodeeastbyelection", n = 1000)
+head(erode_tweets,10)
+```
+
+```{r}
+library(tidytext)
+library(dplyr)
+
+
+# Load SnowballC package
+library(SnowballC)
+
+tidy_tweets <- tweets %>%
+  select(id_str, created_at, text) %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words) %>%
+  mutate(word = wordStem(word))
+
+```
+
+```{r}
+tidy_tweets1 <- erode_tweets %>%
+  select(id_str, created_at, text) %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words) %>%
+  mutate(word = wordStem(word))
+```
+
+```{r}
+library(stringr)
+library(httr)
+afinn <- read.csv("C:\\Users\\HP\\OneDrive\\Documents\\Twitter_sentimental_analysis\\AFINN-111.csv", sep="\t", header=FALSE, col.names=c("word", "score"))
+
+afinn <- get_sentiments("afinn")
+election_sentiment <- tidy_tweets %>%
+                      inner_join(afinn, by = "word") %>%
+                      group_by(id_str) %>%
+                      summarize(sentiment = sum(value))
+election_sentiment
+
+```
+
+
+```{r}
+afinn <- get_sentiments("afinn")
+election_sentiment1 <- tidy_tweets1 %>%
+                      inner_join(afinn, by = "word") %>%
+                      group_by(id_str) %>%
+                      summarize(sentiment = sum(value))
+election_sentiment1
+```
+
+
+
+```{r}
+wordcloud(tidy_tweets$word, scale=c(5,0.5), min.freq=10, max.words=50, random.order=FALSE,
+          rot.per=0.35, colors=brewer.pal(8, "Dark2"))
+
+```
+
+```{r}
+wordcloud(tidy_tweets1$word, scale=c(5,0.5), min.freq=10, max.words=50, random.order=FALSE,
+          rot.per=0.35, colors=brewer.pal(8, "Dark2"))
+```
+
+```{r}
+predict_sentiment <- function(tidy_tweets) {
+  tweet_text <- str_remove_all(tidy_tweets, "http\\S+|www\\S+|@[[:alnum:]_]+|#[[:alnum:]_]+") %>%
+    str_squish()
+  score <- tweet_text %>%
+    unnest_tokens(word, .) %>%
+    left_join(afinn, by = "word") %>%
+    filter(!is.na(value)) %>%
+    summarize(sentiment_score = sum(value))
+  if (score$sentiment_score > 0) {
+    return("positive")
+  } else if (score$sentiment_score < 0) {
+    return("negative")
+  } else {
+    return("neutral")
+  }
+}
+```
+
+```{r}
+library(rtweet)
+new_tweets <- search_tweets("#ErodeEastByPolls", n = 1000)
+new_tweets_text <- new_tweets$text
+head(new_tweets_text,10)
+```
+
+```{r}
+# Load libraries
+library(tidytext)
+library(dplyr)
+library(ggplot2)
+
+# Load data
+erode_data <- read.csv("C:\\Users\\HP\\OneDrive\\Documents\\Twitter_sentimental_analysis\\Election tweets.csv")
+head(erode_data,10)
+```
+
+```{r}
+# Pre-process data
+erode_data_clean <- erode_data %>%
+  unnest_tokens(word, full_text) %>%
+  anti_join(stop_words)
+```
+
+```{r}
+# Perform sentiment analysis
+erode_sentiment <- erode_data_clean %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(sentiment) 
+```
+
+```{r}
+# Visualize sentiment analysis
+ggplot(data = erode_sentiment, aes(x = sentiment, y = n)) +
+  geom_bar(stat = "identity") +
+  ggtitle("Sentiment Analysis of Erode Elections") +
+  xlab("Sentiment") +
+  ylab("Count")
+```
+
+```{r}
+# Load the required libraries
+library(tm)
+library(e1071)
+library(caret)
+```
+
+```{r}
+# Read the data
+data <- read.csv("C:\\Users\\HP\\OneDrive\\Documents\\Twitter_sentimental_analysis\\Election tweets.csv", header = TRUE, stringsAsFactors = FALSE)
+head(data,10)
+
+```
+
+```{r}
+# Create a corpus
+corpus <- VCorpus(VectorSource(data$full_text))
+corpus
+```
+
+```{r}
+
+# Text preprocessing
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, removeNumbers)
+corpus <- tm_map(corpus, removeWords, stopwords("english"))
+corpus <- tm_map(corpus, stemDocument)
+```
+
+```{r}
+# Convert to a document-term matrix
+dtm <- DocumentTermMatrix(corpus)
+dtm
+```
+
+```{r}
+library(tidytext)
+
+
+data_clean <- data %>%
+  unnest_tokens(word, full_text) %>%
+  anti_join(stop_words)
+
+```
+
+```{r}
+data_clean <- data_clean %>%
+  na.omit(data_clean)
+
+```
+
+```{r}
+nrc_joy <- get_sentiments("nrc") %>% 
+  filter(sentiment == "joy")
+
+```
+
+```{r}
+library(tidyr)
+bullring_sentiment_bing <- data_clean %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative)
+
+```
+
+```{r}
+bullring_sentiment_afinn <- data_clean %>%
+  inner_join(get_sentiments("afinn")) %>% 
+  group_by(word) %>% 
+  summarise(sentiment = sum(value)) %>% 
+  mutate(method = "Group Chat Sentiment")
+```
+
+```{r}
+bullring_sentiment_afinn%>%
+  ggplot(aes(word, sentiment, fill = method)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~method, ncol = 3, scales = "free_y")
+```
+
+```{r}
+bing_and_nrc <- bind_rows(data_clean %>% 
+                            inner_join(get_sentiments("bing")) %>%
+                            mutate(method = "Bing et al."),
+                          data_clean %>% 
+                            inner_join(get_sentiments("nrc") %>% 
+                                         filter(sentiment %in% c("positive", 
+                                                                 "negative"))) %>%
+                            mutate(method = "NRC")) %>%
+  count(method, sentiment) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative)
+```
+
+```{r}
+bing_word_counts <- data_clean %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+```
+
+```{r}
+bing_word_counts %>%
+  group_by(sentiment) %>%
+  top_n(10) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(y = "Contribution to sentiment",
+       x = NULL) +
+  coord_flip()
+```
+
+```{r}
+library(wordcloud)
+data_clean <- data %>%
+  unnest_tokens(word, full_text) %>%
+  anti_join(stop_words)
+```
+
+```{r}
+data_clean <- data_clean %>%
+  na.omit(data_clean)
+
+
+
+data_clean%>%
+  count(word) %>%
+  with(wordcloud(word, n,colors = c("#D55E00", "#009E73"), max.words = 100))
+```
+
+```{r}
+library(reshape2)
+data_clean %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  comparison.cloud(colors = c("#D55E00", "#009E73"),
+                   max.words = 100)
+```
+
+```{r}
+# Term document matrix
+# Build corpus
+
+library(tm)
+library(NLP)
+corpus <- iconv(data$full_text, to = "utf-8")
+corpus <- Corpus(VectorSource(corpus))
+# Clean text
+corpus <- tm_map(corpus, tolower)
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, removeNumbers)
+cleanset <- tm_map(corpus, removeWords, stopwords('english'))
+removeURL <- function(x) gsub('http[[:alnum:]]*', '', x)
+cleanset <- tm_map(cleanset, content_transformer(removeURL))
+
+cleanset <- tm_map(cleanset, removeWords, c('icin', 'bir', "ile", "ilgili","karsi", "olarak","kadar"))
+cleanset <- tm_map(cleanset, gsub, 
+                   pattern = 'stocks', 
+                   replacement = 'stock')
+cleanset <- tm_map(cleanset, stripWhitespace)
+```
+
+```{r}
+tdm <- TermDocumentMatrix(cleanset)
+tdm <- as.matrix(tdm)
+tdm <- tdm[rowSums(tdm)>80,]
+tdm[1:5,1:5]
+```
+
+```{r}
+# Network of terms
+library(igraph)
+tdm[tdm>1] <- 1
+termM <- tdm %*% t(tdm)
+termM[1:5,1:5]
+```
+
+```{r}
+g <- graph.adjacency(termM, weighted = T, mode = 'undirected')
+g
+```
+
+```{r}
+g <- simplify(g)
+V(g)$label <- V(g)$name
+V(g)$degree <- degree(g)
+# Network diagram
+set.seed(222)
+plot(g)
+```
+
+```{r}
+plot(g,
+     vertex.color='blue',
+     vertex.size = 4,
+     vertex.label.dist = 1.0
+     
+     )
+```
+
+```{r}
+# Community detection
+comm <- cluster_edge_betweenness(g)
+plot(comm, g)
+```
+
+```{r}
+prop <- cluster_label_prop(g)
+plot(prop, g)
+```
+
+```{r}
+greed <- cluster_fast_greedy(as.undirected(g))
+plot(greed, as.undirected(g),
+     vertex.label.dist = .05,
+          vertex.size = 25
+     )
+```
+
+```{r}
+# Highlighting degrees
+V(g)$label.cex <- 2.2*V(g)$degree / max(V(g)$degree) + 0.3
+V(g)$label.color <- rgb(0, 0, .2, .8)
+V(g)$frame.color <- NA
+egam <- (log(E(g)$weight)+.4) / max(log(E(g)$weight) + .4)
+E(g)$color <- rgb(.5, .5, 0, egam)
+E(g)$width <- egam
+plot(g,
+     vertex.color='green',
+     vertex.size = V(g)$degree*.5)
+```
+
+```{r}
+# Network of chats
+tweetM <- t(tdm) %*% tdm
+g <- graph.adjacency(tweetM, weighted = T, mode = 'undirected')
+V(g)$degree <- degree(g)
+g <- simplify(g)
+hist(V(g)$degree,
+     breaks = 100,
+     col = 'green',
+     main = 'Histogram of Degree',
+     ylab = 'Frequency',
+     xlab = 'Degree')
+```
+
+```{r}
+# Set labels of vertices 
+V(g)$label <- V(g)$name
+V(g)$label.cex <- 1
+V(g)$label.color <- rgb(.4, 0, 0, .7)
+V(g)$size <- 2
+V(g)$frame.color <- NA
+plot(g, vertex.label=NA, vertex.size=6)
+```
+
+```{r}
+df<-read.csv("C:\\Users\\HP\\OneDrive\\Documents\\Twitter_sentimental_analysis\\election.csv") #allows you to navigate to file location
+dfCopy <- df # used to do the ngrams, need the context
+reactable(df, searchable = T, filterable=T) #nice way to review the data, searchable and filterable
+```
+
+```{r}
+library(tidytext)
+library(topicmodels)
+
+
+mystopwords <- c((stopwords('english')),c("https", "t.co", "it's")) #or read in your stop word list
+
+head(dfCopy,10)
+```
+
+```{r}
+dim(dfCopy)
+```
+
+```{r}
+### create the Corpus or VCorpus.
+
+w <- VCorpus(VectorSource(dfCopy$full_text))
+
+w <- tm_map(w, removeNumbers)
+w <- tm_map(w, content_transformer(removeURL))
+w <- tm_map(w, removePunctuation)
+w <- tm_map(w, content_transformer(tolower))
+w <- tm_map(w, removeWords, mystopwords)
+w <- tm_map(w, stripWhitespace)
+
+
+```
+
+```{r}
+### Topic modelling
+tdm <- TermDocumentMatrix(w)
+dtm <- DocumentTermMatrix(w) 
+```
+
+```{r}
+# Processing using standard packages and methods
+
+
+frequency <- findFreqTerms(tdm, lowfreq=15)
+frequency
+```
+
+```{r}
+freq <- rowSums(as.matrix(tdm))
+limit <- 5
+freq <- subset(freq, freq >= limit)
+dfreq <- data.frame(term = names(freq), freq = freq)
+spoint <- 20
+ggplot(dfreq[dfreq$freq>spoint,], aes(x=term, y=freq)) + geom_bar(stat = "identity") + xlab("Terms") + ylab("Count") +coord_flip()
+```
+
+```{r}
+library("RGraphics") 
+m <- as.matrix(tdm)
+word.freq <- sort(rowSums(m), decreasing = T)
+words <- as.data.frame(word.freq)
+wordcloud(words = names(word.freq), freq = word.freq, min.freq = 3,random.order = F)
+```
+
+```{r}
+words$word <- rownames(words) #new col = rownames
+words<-words[c(2,1)]          #interchance the cols
+names(words)[1]<-"word"       #change the col names
+names(words)[2]<-"freq"       #phew - must be an easier tricky way!
+
+wordcloud2(words[words[,2]>3,], size=3, color='random-dark')
+```
+
+```{r}
+sentText <- get_nrc_sentiment(words$word)
+a<-as.data.frame(sort(colSums(sentText)))
+barplot(a[,1], names=row.names(a), las=2)
+```
+
+```{r}
+tdm2 <- removeSparseTerms(tdm, sparse = 0.95)
+m2 <- as.matrix(tdm2)
+distMatrix <- dist(scale(m2)) #note need to scale central mean
+fit <- hclust(distMatrix, method = "ward.D")
+plot(fit)
+rect.hclust(fit, k = 6) # draw 6 groupings
+```
+
+```{r}
+### Topic Modelling
+
+rowTotals <- apply(dtm , 1, sum)
+dtm2   <- dtm[rowTotals> 0, ] #leave out 0 rows 
+lda <- LDA(dtm2, k = 6) # find n topics
+term <- terms(lda, 4) # first 4 terms of every topic
+term
+```
+
+```{r}
+BigramTokenizer <- function(x,n) unlist(lapply(ngrams(words(x), n), paste, collapse = " "), use.names = FALSE)
+ngram <- 3 #set size of the word group
+ngList = BigramTokenizer(dfCopy$full_text, ngram) # get the set of 3 word groups
+x <- as.data.frame(sort(table(ngList),decreasing=T)) #use table to get the counts, set as a df
+x$ngList<-as.character(x$ngList) #make sure not blessed factors
+head(x, 10)
+```
+
+```{r}
+wordcloud2(x[x$Freq>1,], size=0.5, color='random-dark')
+```
+
+![](4.jpeg)

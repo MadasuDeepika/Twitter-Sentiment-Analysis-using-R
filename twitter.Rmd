@@ -1,0 +1,378 @@
+---
+title: "Twitter_Sentimental_Analysis"
+author: "G.Harinisri & Madasu Deepika"
+date: "19MIA1069 & 19MIA1066"
+output: html_document
+---
+
+# **REVIEW-2 **
+
+
+
+![](4.jpg)
+
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(warn = -1)
+```
+
+##### **IMPORTING THE LIBRARIES**
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidytext)
+library(igraph)
+library(ggraph)
+library(rtweet)
+library(maps)
+library(tm)
+library(wordcloud) 
+library(syuzhet)
+library(reactable)
+library(wordcloud2)
+library(stringr)
+library(data.table)
+library(tidytext)
+library(topicmodels)
+```
+
+```{r}
+BigramTokenizer <- function(x,n) unlist(lapply(ngrams(words(x), n), paste, collapse = " "), use.names = FALSE)
+```
+
+```{r}
+clean_tweets <- function(x) { 
+  x %>%
+    str_remove_all(" ?(f|ht)(tp)(s?)(://)(.*)[.|/](.*)") %>%
+    str_replace_all("&amp;", "and") %>%
+    str_remove_all("[[:punct:]]") %>%
+    str_remove_all("^RT:? ") %>%
+    str_remove_all("@[[:alnum:]]+") %>%
+    str_remove_all("#[[:alnum:]]+") %>%
+    str_replace_all("\\\n", " ") %>%
+    str_to_lower() %>%
+    str_trim("both")
+}
+```
+
+```{r}
+removeURL <- function(x) gsub("http[^[:space:]]*", "", x) 
+removeNumPunct <- function(x) gsub("[^[:alpha:][:space:]]*", "", x) 
+removeUsername <- function(x) gsub("@[^[:space:]]*", "", x) 
+removeSingle <- function(x) gsub(" . ", " ", x) 
+
+mystopwords <- c((stopwords('english')),c("https", "t.co", "it's")) #or read in your stop word list
+
+path<-"C:/Users/HP/OneDrive/Documents/Twitter_sentimental_analysis" #Set your own path if using.
+setwd(path)
+```
+
+
+##### **JOE BIDEN DATASET**
+```{r}
+
+
+df<-read.csv("C:/Users/HP/OneDrive/Documents/Twitter_sentimental_analysis/BidenJuly21SearchTweets.csv") #allows you to navigate to file location
+dfCopy <- df # used to do the ngrams, need the context
+reactable(df, searchable = T, filterable=T) #nice way to review the data, searchable and filterable
+```
+
+##### **PREPROCESSING**
+```{r}
+### To isolate only Tweets set to filter out the following
+df <- df[df$is_retweet == F,] #keep tweets that have not been retweeted
+df <- df[is.na(df$reply_to_status_id), ] #keep tweets left not replied to
+```
+
+```{r}
+### Start cleaning the text column, some double is fine.
+
+df$text<- clean_tweets(df$text) #the function seems to work well, there is double up.
+df$text<- removeWords(df$text, mystopwords) #can remove stopwords using this call also
+dim(df)
+```
+
+```{r}
+
+### create the Corpus or VCorpus.
+
+w <- VCorpus(VectorSource(df$text))
+w <- tm_map(w, content_transformer(removeNumPunct))
+w <- tm_map(w, removeNumbers)
+w <- tm_map(w, content_transformer(removeURL))
+w <- tm_map(w, removePunctuation)
+w <- tm_map(w, content_transformer(tolower))
+w <- tm_map(w, removeWords, mystopwords)
+w <- tm_map(w, stripWhitespace)
+w <- tm_map(w, content_transformer(removeUsername))
+w <- tm_map(w, content_transformer(removeSingle))
+```
+
+```{r}
+### Topic modelling
+tdm <- TermDocumentMatrix(w)
+dtm <- DocumentTermMatrix(w) 
+
+```
+
+##### **Check word frequencies**
+```{r}
+# Processing using standard packages and methods
+
+
+frequency <- findFreqTerms(tdm, lowfreq=15)
+frequency
+```
+## Plot the words with frequencies greater than limit unsorted
+
+```{r}
+
+freq <- rowSums(as.matrix(tdm))
+limit <- 5
+freq <- subset(freq, freq >= limit)
+dfreq <- data.frame(term = names(freq), freq = freq)
+spoint <- 20
+ggplot(dfreq[dfreq$freq>spoint,], aes(x=term, y=freq)) + geom_bar(stat = "identity") + xlab("Terms") + ylab("Count") +coord_flip()
+```
+
+##### **correlated word associations**
+```{r}
+
+corLimit <- 0.25
+term<- "biden"
+findAssocs(tdm, term, corLimit)
+term<-"perfect"
+findAssocs(tdm, term, corLimit)
+term<-"obama"
+findAssocs(tdm, term, corLimit)
+```
+##### **Plot wordclouds and barplot of word frequency sorted**
+
+```{r}
+library("RGraphics") 
+m <- as.matrix(tdm)
+word.freq <- sort(rowSums(m), decreasing = T)
+words <- as.data.frame(word.freq)
+wordcloud(words = names(word.freq), freq = word.freq, min.freq = 3,random.order = F)
+```
+
+##### **To use wordcloud2 need word, freq and that order**
+```{r}
+
+words$word <- rownames(words) #new col = rownames
+words<-words[c(2,1)]          #interchance the cols
+names(words)[1]<-"word"       #change the col names
+names(words)[2]<-"freq"       #phew - must be an easier tricky way!
+
+wordcloud2(words[words[,2]>3,], size=3, color='random-dark')
+```
+
+
+##### **Simple sentiment barplot of range of emotions**
+```{r}
+
+sentText <- get_nrc_sentiment(words$word)
+a<-as.data.frame(sort(colSums(sentText)))
+barplot(a[,1], names=row.names(a), las=2)
+```
+
+#####  **Cluster Plot with 6 groupings**
+```{r}
+
+tdm2 <- removeSparseTerms(tdm, sparse = 0.95)
+m2 <- as.matrix(tdm2)
+distMatrix <- dist(scale(m2)) #note need to scale central mean
+fit <- hclust(distMatrix, method = "ward.D")
+plot(fit)
+rect.hclust(fit, k = 6) # draw 6 groupings
+
+```
+
+
+```{r}
+### Topic Modelling
+
+rowTotals <- apply(dtm , 1, sum)
+dtm2   <- dtm[rowTotals> 0, ] #leave out 0 rows 
+lda <- LDA(dtm2, k = 6) # find n topics
+term <- terms(lda, 4) # first 4 terms of every topic
+term
+```
+
+
+```{r}
+
+text<- clean_tweets(dfCopy$text)
+text<- removeWords(text, mystopwords)
+ngram <- 3 #set size of the word group
+ngList = BigramTokenizer(text, ngram) # get the set of 3 word groups
+x <- as.data.frame(sort(table(ngList),decreasing=T)) #use table to get the counts, set as a df
+x$ngList<-as.character(x$ngList) #make sure not blessed factors
+head(x, 10)
+```
+##### **Plot wordcloud**
+```{r}
+
+
+wordcloud2(x[x$Freq>1,], size=0.5, color='random-dark')
+
+```
+![](1.png)
+
+
+
+
+
+
+
+
+
+
+##### **DONALD TRUMP DATASET**
+```{r}
+df1<-read.csv("C:/Users/HP/OneDrive/Documents/Twitter_sentimental_analysis/TrumpJuly21SearchTweets.csv") #allows you to navigate to file location
+dfCopy1 <- df1 
+reactable(df1, searchable = T, filterable=T) #nice way to review the data, searchable and filterable
+```
+
+```{r}
+
+### To isolate only Tweets set to filter out the following
+df1 <- df1[df1$is_retweet == F,] #keep tweets that have not been retweeted
+df1 <- df1[is.na(df1$reply_to_status_id), ] #keep tweets left not replied to
+dim(df1)
+```
+
+
+##### **PREPROCESSING**
+```{r}
+### Start cleaning the text column, some double is fine.
+
+df1$text<- clean_tweets(df1$text) #the function seems to work well, there is double up.
+df1$text<- removeWords(df1$text, mystopwords) #can remove stopwords using this call also
+
+```
+
+```{r}
+### create the Corpus or VCorpus
+
+w1 <- VCorpus(VectorSource(df1$text))
+w1<- tm_map(w1, content_transformer(removeNumPunct))
+w1 <- tm_map(w1, removeNumbers)
+w1 <- tm_map(w1, content_transformer(removeURL))
+w1 <- tm_map(w1, removePunctuation)
+w1 <- tm_map(w1, content_transformer(tolower))
+w1 <- tm_map(w1, removeWords, mystopwords)
+w1 <- tm_map(w1, stripWhitespace)
+w1 <- tm_map(w1, content_transformer(removeUsername))
+w1 <- tm_map(w1, content_transformer(removeSingle))
+
+
+tdm1 <- TermDocumentMatrix(w1)
+dtm1 <- DocumentTermMatrix(w1) #used in topic modelling
+```
+
+
+##### **Check word frequencies and  Plot the words with frequencies greater than limit unsorted**
+```{r}
+
+frequency1 <- findFreqTerms(tdm1, lowfreq=15)
+freq1 <- rowSums(as.matrix(tdm1))
+limit <- 5
+freq1 <- subset(freq1, freq1 >= limit)
+dfreq1 <- data.frame(term = names(freq1), freq1 = freq1)
+spoint <- 20
+ggplot(dfreq1[dfreq1$freq1>spoint,], aes(x=term, y=freq1)) + geom_bar(stat = "identity") + xlab("Terms") + ylab("Count")
+```
+
+```{r}
+###  Look at correlated word associations
+corLimit1 <- 0.25
+term1<- "trump"
+findAssocs(tdm1, term1, corLimit1)
+term2<-"perfect"
+findAssocs(tdm1, term2, corLimit1)
+term3<-"obama"
+findAssocs(tdm1, term3, corLimit1)
+```
+
+```{r}
+### 3d Plot wordclouds and barplot of word frequency sorted
+m1 <- as.matrix(tdm1)
+word.freq1 <- sort(rowSums(m1), decreasing = T)
+words1 <- as.data.frame(word.freq1)
+wordcloud(words = names(word.freq1), freq = word.freq1, min.freq = 3,random.order = F)
+# to use wordcloud2 need word, freq and that order
+words1$word <- rownames(words1) #new col = rownames
+words1<-words1[c(2,1)]          #interchance the cols
+names(words1)[1]<-"word"       #change the col names
+names(words1)[2]<-"freq"       #phew - must be an easier tricky way!
+
+wordcloud2(words1[words1[,2]>3,], size=3, color='random-dark')
+```
+
+![](2.png)
+
+
+```{r}
+### simple sentiment barplot of range of emotions
+sentText1 <- get_nrc_sentiment(words1$word)
+a1<-as.data.frame(sort(colSums(sentText1)))
+barplot(a1[,1], names=row.names(a1), las=2)
+```
+
+```{r}
+
+###   Cluster Plot
+tdm2 <- removeSparseTerms(tdm, sparse = 0.95)
+m2 <- as.matrix(tdm2)
+distMatrix2 <- dist(scale(m2)) #note need to scale central mean
+fit2 <- hclust(distMatrix2, method = "ward.D")
+plot(fit2)
+rect.hclust(fit2, k = 6) # draw 6 groupings
+
+
+```
+
+
+```{r}
+### 3g Topic Modelling
+
+rowTotals2 <- apply(dtm1 , 1, sum)
+dtm1 <- dtm1[rowTotals2> 0, ] #leave out 0 rows 
+lda1 <- LDA(dtm1, k = 6) # find n topics
+term1 <- terms(lda1, 4) # first 4 terms of every topic
+term1
+```
+
+
+```{r}
+### 3i look at N-grams, in particular 3n 
+text1<- clean_tweets(dfCopy1$text1)
+text1<- removeWords(text1, mystopwords)
+ngram <- 3 #set size of the word group
+ngList1 = BigramTokenizer(text1, ngram) # get the set of 3 word groups
+x1 <- as.data.frame(sort(table(ngList1),decreasing=T)) #use table to get the counts, set as a df
+x1$ngList1<-as.character(x1$ngList1) #make sure not blessed factors
+head(x1, 10)
+```
+
+```{r}
+### Plot wordcloud
+wordcloud2(x[x$Freq>1,], size=0.5, color='random-dark') #single most informative visualisation!
+```
+![](3.png)
+
+
+
+#### INFERENCE:
+
+In recent years, the application of opinion mining for sentiment analysis has gained  momentum that  concentrates on identification  and  interpretation  of  emotions,  public  opinions regarding a desired subject or object based on textual data. In this we have done, sentiment analysis has been performed on tweets retrieved from the US Election 2020. The polarity of the review is judged based on the sentiment expression. The  fundamental  tasks  involved  in  opinion  mining  including extraction  of  data,  clustering  of  extracted  data  as  well  its classification. 
+
+Here we have collected tweets data of Joe Biden and Donald Trump. For this, we used following keywords: "JoeBiden", "DonaldTrump", "BidenHarris", "US Election 2020", "TrumpPence". We collected around 1.25M tweets for the period of October 2019 to July 2020. Figure 1 shows our proposed system workflow.
+
+
+
